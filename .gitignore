@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+audit.md
+bob-trace/
+.bob/mcp.json
