@@ -1,0 +1,1 @@
+- generic [ref=e2]: "{\"status\":\"healthy\",\"version\":\"1.0.0\"}"
