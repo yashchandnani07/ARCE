@@ -136,6 +136,73 @@ def run_tests(test_dir: str = "tests/") -> str:
             "return_code": -1
         })
 
+@mcp.tool
+def scan_repository(repo_path: str, output_format: str = "json") -> str:
+    """
+    Scan a repository for vulnerabilities using pip-audit.
+    
+    Args:
+        repo_path: Path to the repository to scan
+        output_format: Output format for results (default: "json", options: "json", "markdown", "columns")
+    
+    Returns:
+        JSON string with keys: vulnerabilities_found (bool), output (str), error (str)
+    """
+    try:
+        import sys
+        repo_path_obj = Path(repo_path)
+        
+        # Validate repository path
+        if not repo_path_obj.exists():
+            return json.dumps({
+                "vulnerabilities_found": False,
+                "output": "",
+                "error": f"Repository path does not exist: {repo_path}"
+            })
+        
+        # Check if requirements.txt exists
+        requirements_file = repo_path_obj / "requirements.txt"
+        if not requirements_file.exists():
+            return json.dumps({
+                "vulnerabilities_found": False,
+                "output": "",
+                "error": f"No requirements.txt found in {repo_path}"
+            })
+        
+        # Run pip-audit with specified format
+        result = subprocess.run(
+            [sys.executable, "-m", "pip_audit", "-r", str(requirements_file), "--format", output_format],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=str(repo_path_obj)
+        )
+        
+        # pip-audit returns non-zero exit code when vulnerabilities are found
+        vulnerabilities_found = result.returncode != 0
+        
+        scan_result = {
+            "vulnerabilities_found": vulnerabilities_found,
+            "output": result.stdout if result.stdout else result.stderr,
+            "error": result.stderr if result.returncode not in [0, 1] else ""
+        }
+        
+        return json.dumps(scan_result, indent=2)
+    
+    except subprocess.TimeoutExpired:
+        return json.dumps({
+            "vulnerabilities_found": False,
+            "output": "",
+            "error": "Scan timed out after 120 seconds"
+        })
+    except Exception as e:
+        return json.dumps({
+            "vulnerabilities_found": False,
+            "output": "",
+            "error": f"Error scanning repository: {str(e)}"
+        })
+
+
 
 @mcp.tool
 def generate_audit_trail(
@@ -296,9 +363,13 @@ def create_governed_pr(branch_name: str, commit_message: str, pr_title: str) -> 
         PR URL string or error message
     """
     try:
+        # Add timestamp to branch name to prevent conflicts
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        unique_branch_name = f"{branch_name}-{timestamp}"
+        
         # Step 1: Create and checkout new branch
         result = subprocess.run(
-            ["git", "checkout", "-b", branch_name],
+            ["git", "checkout", "-b", unique_branch_name],
             capture_output=True,
             text=True,
             timeout=30,
@@ -331,7 +402,7 @@ def create_governed_pr(branch_name: str, commit_message: str, pr_title: str) -> 
         
         # Step 4: Push branch to remote
         result = subprocess.run(
-            ["git", "push", "origin", branch_name],
+            ["git", "push", "origin", unique_branch_name],
             capture_output=True,
             text=True,
             timeout=60,

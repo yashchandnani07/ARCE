@@ -3,7 +3,7 @@
     "arce-tools": {
       "command": "REPLACE_WITH_YOUR_PYTHON_PATH",
       "args": [
-        "arce/mcp_server.py"
+        "arce/run_mcp_server.py"
       ],
       "alwaysAllow": [
         "check_reachability",

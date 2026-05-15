@@ -45,6 +45,7 @@ The script will:
 - ✅ Create virtual environment
 - ✅ Install all dependencies
 - ✅ Validate everything works
+- ✅ Configure wrapper script to suppress stderr (no red error indicators!)
 
 **Expected output:**
 ```
@@ -91,7 +92,7 @@ d:/Projects/ARCE/venv/Scripts/python.exe
   "mcpServers": {
     "arce-tools": {
       "command": "YOUR_PYTHON_PATH",
-      "args": ["arce/mcp_server.py"],
+      "args": ["arce/run_mcp_server.py"],
       "alwaysAllow": [
         "check_reachability",
         "run_tests",
@@ -119,8 +120,10 @@ d:/Projects/ARCE/venv/Scripts/python.exe
 4. **Verify Connection**
    - Look for MCP icon in bottom right
    - Should show green checkmarks for:
-     - ✅ `arce-tools`
+     - ✅ `arce-tools` (no red error indicators!)
      - ✅ `playwright`
+   
+   **Note:** The wrapper script suppresses stderr output, so you won't see any false error indicators from FastMCP's informational messages.
 
 ## Test Your Setup
 
@@ -227,7 +230,7 @@ ARCE provides 4 custom MCP tools:
 2. Review the MCP output logs in Bob IDE
 3. Test the MCP server manually:
    ```powershell
-   .\venv\Scripts\python.exe arce/mcp_server.py
+   .\venv\Scripts\python.exe arce/run_mcp_server.py
    ```
 
 ## Success Checklist

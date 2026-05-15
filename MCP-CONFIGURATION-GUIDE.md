@@ -2,6 +2,10 @@
 
 This guide explains how to configure Bob IDE to use the ARCE MCP server.
 
+## About the Wrapper Script
+
+The ARCE MCP server uses a wrapper script (`run_mcp_server.py`) that suppresses stderr output to eliminate false error indicators in Bob IDE. FastMCP writes informational messages (banner, version warnings) to stderr, which Bob IDE interprets as errors and displays with red indicators. The wrapper redirects stderr to devnull while keeping stdout intact for MCP protocol communication, ensuring a clean error-free experience.
+
 ## Quick Start
 
 1. **Find your Python path** (from the ARCE directory):
@@ -36,7 +40,7 @@ Copy the content from `mcp-config-template.json` and replace the placeholder:
   "mcpServers": {
     "arce-tools": {
       "command": "REPLACE_WITH_YOUR_PYTHON_PATH",
-      "args": ["arce/mcp_server.py"],
+      "args": ["arce/run_mcp_server.py"],
       "alwaysAllow": [
         "check_reachability",
         "run_tests",
@@ -68,7 +72,7 @@ Copy the content from `mcp-config-template.json` and replace the placeholder:
   "mcpServers": {
     "arce-tools": {
       "command": "d:/Projects/ARCE/venv/Scripts/python.exe",
-      "args": ["arce/mcp_server.py"],
+      "args": ["arce/run_mcp_server.py"],
       "alwaysAllow": [
         "check_reachability",
         "run_tests",
@@ -87,7 +91,7 @@ Copy the content from `mcp-config-template.json` and replace the placeholder:
   "mcpServers": {
     "arce-tools": {
       "command": "C:/Users/YourUsername/AppData/Local/Programs/Python/Python312/python.exe",
-      "args": ["arce/mcp_server.py"],
+      "args": ["arce/run_mcp_server.py"],
       "alwaysAllow": [
         "check_reachability",
         "run_tests",
@@ -114,7 +118,7 @@ The full path to your Python executable. Must be the Python installation where f
 ```
 
 ### `args`
-The arguments passed to the Python command. This should always be `["arce/mcp_server.py"]` to run the MCP server script.
+The arguments passed to the Python command. This should always be `["arce/run_mcp_server.py"]` to run the wrapper script that launches the MCP server with stderr suppression.
 
 ### `alwaysAllow`
 List of MCP tools that Bob IDE can use without asking for permission each time. The ARCE tools are:
@@ -177,11 +181,11 @@ pip install fastmcp pytest pip-audit flask pyyaml
 
 Then use `.\venv\Scripts\python.exe` as the command.
 
-### Issue: "Cannot find arce/mcp_server.py"
+### Issue: "Cannot find arce/run_mcp_server.py"
 
 **Solution:** The MCP server runs from the ARCE root directory. Make sure:
 1. Bob IDE's workspace is set to the ARCE directory
-2. The `args` path is relative: `["arce/mcp_server.py"]`
+2. The `args` path is relative: `["arce/run_mcp_server.py"]`
 
 ### Issue: MCP server shows red X or disconnected
 
@@ -190,9 +194,10 @@ Then use `.\venv\Scripts\python.exe` as the command.
 2. Verify Python path is correct
 3. Test the server manually:
    ```powershell
-   .\venv\Scripts\python.exe arce/mcp_server.py
+   .\venv\Scripts\python.exe arce/run_mcp_server.py
    ```
 4. If it runs without errors, the configuration is correct
+5. Note: You won't see any red error indicators with the wrapper script
 
 ### Issue: "Permission denied" when running tools
 
@@ -209,7 +214,7 @@ If you need to run the MCP server from a different directory:
   "mcpServers": {
     "arce-tools": {
       "command": "d:/Projects/ARCE/venv/Scripts/python.exe",
-      "args": ["arce/mcp_server.py"],
+      "args": ["arce/run_mcp_server.py"],
       "cwd": "d:/Projects/ARCE",
       "alwaysAllow": ["check_reachability", "run_tests", "generate_audit_trail", "create_governed_pr"]
     }
@@ -226,7 +231,7 @@ To pass environment variables to the MCP server:
   "mcpServers": {
     "arce-tools": {
       "command": "d:/Projects/ARCE/venv/Scripts/python.exe",
-      "args": ["arce/mcp_server.py"],
+      "args": ["arce/run_mcp_server.py"],
       "env": {
         "PYTHONPATH": "d:/Projects/ARCE",
         "DEBUG": "true"

@@ -50,7 +50,9 @@ Demo App (Flask + PyYAML 5.3.1)
 
 ## MCP Setup for Bob IDE
 
-ARCE uses Model Context Protocol (MCP) to provide custom tools to Bob IDE. Follow these steps to set up the MCP server:
+ARCE uses Model Context Protocol (MCP) to provide custom tools to Bob IDE. Follow these steps to set up the MCP server.
+
+> 💡 **Note:** ARCE uses a wrapper script that suppresses stderr output to eliminate false error indicators in Bob IDE. You won't see any red error messages from FastMCP's informational output!
 
 ### Quick Setup (Recommended)
 
@@ -67,6 +69,7 @@ The script will:
 - ✅ Create a virtual environment
 - ✅ Install all dependencies (fastmcp, pytest, pip-audit, etc.)
 - ✅ Validate the installation
+- ✅ Configure wrapper script (suppresses stderr for clean error-free display)
 - ✅ Display next steps
 
 **Step 2: Get your Python path**
@@ -93,7 +96,7 @@ Copy this path - you'll need it for Bob IDE configuration.
   "mcpServers": {
     "arce-tools": {
       "command": "PASTE_YOUR_PYTHON_PATH_HERE",
-      "args": ["arce/mcp_server.py"],
+      "args": ["arce/run_mcp_server.py"],
       "alwaysAllow": [
         "check_reachability",
         "run_tests",
@@ -128,8 +131,10 @@ Copy this path - you'll need it for Bob IDE configuration.
 1. Restart Bob IDE
 2. Check the MCP status icon (bottom right)
 3. You should see green checkmarks for both:
-   - ✅ `arce-tools`
+   - ✅ `arce-tools` (no red error indicators!)
    - ✅ `playwright`
+
+> 💡 **Why no red errors?** The wrapper script (`run_mcp_server.py`) suppresses stderr output from FastMCP's informational messages, giving you a clean, error-free experience in Bob IDE.
 
 **Step 5: Test the MCP server**
 
@@ -183,7 +188,7 @@ gh auth login
 | Issue | Solution |
 |-------|----------|
 | Script execution policy error | Run: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
-| MCP server shows red X | Verify Python path is correct and points to venv |
+| MCP server shows red X | Verify Python path is correct and points to venv; check Bob IDE Output panel for errors |
 | "Module 'fastmcp' not found" | Ensure you're using the venv Python path |
 | Tools not working | Check `alwaysAllow` list includes all 4 ARCE tools |
 | Playwright not connecting | Install Node.js 18+ and run `npx playwright install` |

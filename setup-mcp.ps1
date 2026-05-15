@@ -1,5 +1,9 @@
 # ARCE MCP Setup Script for Windows
 # This script automates the setup of the ARCE MCP server for Bob IDE
+#
+# Note: The MCP server uses a wrapper script (run_mcp_server.py) that suppresses
+# stderr output to eliminate false error indicators in Bob IDE. FastMCP writes
+# informational messages to stderr which Bob IDE interprets as errors.
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  ARCE MCP Server Setup" -ForegroundColor Cyan
@@ -162,7 +166,8 @@ Write-Host "   - Copy mcp-config-template.json content" -ForegroundColor White
 Write-Host "   - Add to Bob IDE settings (see README.md)" -ForegroundColor White
 Write-Host ""
 Write-Host "2. Test the MCP server:" -ForegroundColor White
-Write-Host "   python arce/mcp_server.py" -ForegroundColor Cyan
+Write-Host "   python arce/run_mcp_server.py" -ForegroundColor Cyan
+Write-Host "   (Uses wrapper to suppress stderr and eliminate red error indicators)" -ForegroundColor Gray
 Write-Host ""
 Write-Host "3. Run the demo app:" -ForegroundColor White
 Write-Host "   cd demo-app" -ForegroundColor Cyan
