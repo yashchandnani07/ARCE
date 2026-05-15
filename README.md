@@ -48,7 +48,167 @@ Demo App (Flask + PyYAML 5.3.1)
 
 ---
 
-## Setup (Windows)
+## MCP Setup for Bob IDE
+
+ARCE uses Model Context Protocol (MCP) to provide custom tools to Bob IDE. Follow these steps to set up the MCP server:
+
+### Quick Setup (Recommended)
+
+**Step 1: Clone and run the automated setup script**
+
+```powershell
+git clone https://github.com/yashchandnani07/ARCE.git
+cd ARCE
+.\setup-mcp.ps1
+```
+
+The script will:
+- ✅ Check Python installation (3.8+ required)
+- ✅ Create a virtual environment
+- ✅ Install all dependencies (fastmcp, pytest, pip-audit, etc.)
+- ✅ Validate the installation
+- ✅ Display next steps
+
+**Step 2: Get your Python path**
+
+After the setup script completes, get the full path to your virtual environment Python:
+
+```powershell
+# Windows PowerShell (from ARCE directory)
+(Get-Item .\venv\Scripts\python.exe).FullName
+```
+
+Copy this path - you'll need it for Bob IDE configuration.
+
+**Step 3: Configure Bob IDE**
+
+1. Open Bob IDE
+2. Click the gear icon (⚙️) → Settings
+3. Search for "MCP" or navigate to Extensions → MCP
+4. Click "Edit in settings.json"
+5. Add the MCP server configuration:
+
+```json
+{
+  "mcpServers": {
+    "arce-tools": {
+      "command": "PASTE_YOUR_PYTHON_PATH_HERE",
+      "args": ["arce/mcp_server.py"],
+      "alwaysAllow": [
+        "check_reachability",
+        "run_tests",
+        "generate_audit_trail",
+        "create_governed_pr"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "alwaysAllow": [
+        "browser_navigate",
+        "browser_snapshot",
+        "browser_take_screenshot",
+        "browser_close",
+        "browser_console_messages"
+      ]
+    }
+  }
+}
+```
+
+**Example configuration:**
+```json
+"command": "d:/Projects/ARCE/venv/Scripts/python.exe"
+```
+
+> 💡 **Tip:** See `mcp-config-template.json` for a ready-to-use template and `MCP-CONFIGURATION-GUIDE.md` for detailed configuration instructions.
+
+**Step 4: Verify the setup**
+
+1. Restart Bob IDE
+2. Check the MCP status icon (bottom right)
+3. You should see green checkmarks for both:
+   - ✅ `arce-tools`
+   - ✅ `playwright`
+
+**Step 5: Test the MCP server**
+
+In Bob IDE, try this prompt:
+```
+Use the check_reachability tool to analyze the demo-app directory for the yaml package.
+```
+
+If configured correctly, Bob will execute the tool and return results like "reachable", "imported-but-unused", or "not-imported".
+
+### Manual Setup (Alternative)
+
+If you prefer manual setup or the script doesn't work:
+
+**1. Clone the repository**
+
+```powershell
+git clone https://github.com/yashchandnani07/ARCE.git
+cd ARCE
+```
+
+**2. Create and activate virtual environment**
+
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
+
+**3. Install Python dependencies**
+
+```powershell
+pip install fastmcp pytest pip-audit flask pyyaml streamlit
+```
+
+**4. Install Playwright browsers**
+
+```powershell
+npx playwright install
+```
+
+**5. Authenticate GitHub CLI**
+
+```powershell
+gh auth login
+```
+
+**6. Configure Bob IDE** (follow Step 3 from Quick Setup above)
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Script execution policy error | Run: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
+| MCP server shows red X | Verify Python path is correct and points to venv |
+| "Module 'fastmcp' not found" | Ensure you're using the venv Python path |
+| Tools not working | Check `alwaysAllow` list includes all 4 ARCE tools |
+| Playwright not connecting | Install Node.js 18+ and run `npx playwright install` |
+
+📖 **For detailed troubleshooting, see:**
+- [MCP Configuration Guide](MCP-CONFIGURATION-GUIDE.md) - Complete configuration reference
+- [MCP Server Troubleshooting](Project-context/MCP-Server-Troubleshooting.md) - Common errors and solutions
+
+### Resetting Demo App to Vulnerable State
+
+To reset the demo app for a fresh demonstration:
+
+```powershell
+git checkout main
+git reset --hard origin/main
+.\venv\Scripts\pip.exe install "pyyaml==5.3.1" --force-reinstall
+```
+
+This restores `app.py` to the vulnerable `yaml.load()` and pins pyyaml back to 5.3.1.
+
+---
+
+## Setup (Windows) - Legacy Instructions
+
+> ⚠️ **Note:** Use the MCP Setup section above for the recommended setup process.
 
 ### 1. Clone the repo
 

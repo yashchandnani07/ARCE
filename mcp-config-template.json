@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "arce-tools": {
+      "command": "REPLACE_WITH_YOUR_PYTHON_PATH",
+      "args": [
+        "arce/mcp_server.py"
+      ],
+      "alwaysAllow": [
+        "check_reachability",
+        "run_tests",
+        "generate_audit_trail",
+        "create_governed_pr"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ],
+      "alwaysAllow": [
+        "browser_navigate",
+        "browser_snapshot",
+        "browser_take_screenshot",
+        "browser_close",
+        "browser_console_messages"
+      ]
+    }
+  }
+}
