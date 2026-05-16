@@ -1,6 +1,10 @@
 venv/
 __pycache__/
 *.pyc
-audit.md
 bob-trace/
 .bob/mcp.json
+pyrightconfig.json
+.pytest_cache/
+*.egg-info/
+dist/
+build/
