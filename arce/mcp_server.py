@@ -66,6 +66,39 @@ def end_pipeline_run(status: str) -> str:
 
 
 @mcp.tool
+def evaluate_policy(severity: str, reachability: str) -> str:
+    """
+    Evaluate a vulnerability against policy rules to determine remediation action.
+    
+    Args:
+        severity: Vulnerability severity (critical, high, medium, low, negligible)
+        reachability: Reachability verdict (reachable, imported-but-unused, not-imported)
+    
+    Returns:
+        JSON string with 'action' and 'reason' keys
+    """
+    try:
+        from arce.policy import engine
+        verdict = engine.evaluate(severity, reachability)
+        
+        # Update run record with policy verdict if active run exists
+        if _active_run_id:
+            try:
+                from arce import run_io
+                verdict_str = f"{verdict['action']}: {verdict['reason']}"
+                run_io.update_run(_active_run_id, policy_verdict=verdict_str)
+            except Exception:
+                pass  # Don't fail if run update fails
+        
+        return json.dumps(verdict, indent=2)
+    except Exception as e:
+        return json.dumps({
+            "action": "require_approval",
+            "reason": f"Error evaluating policy: {str(e)}"
+        })
+
+
+@mcp.tool
 def check_reachability(package_name: str, source_dir: str) -> str:
     """
     Check if a vulnerable package is actually imported and called in the codebase.
@@ -164,6 +197,7 @@ def run_tests(test_dir: str = "tests/") -> str:
     """
     try:
         import sys
+        import re
         # Use the same Python interpreter to run pytest (ensures venv pytest is used)
         result = subprocess.run(
             [sys.executable, "-m", "pytest", test_dir, "-v"],
@@ -173,6 +207,20 @@ def run_tests(test_dir: str = "tests/") -> str:
             cwd=str(Path(__file__).parent.parent / "demo-app")
         )
         
+        # Parse test counts from pytest output
+        passed_count = 0
+        failed_count = 0
+        stdout_text = result.stdout
+        
+        # Look for pytest summary line like "3 passed in 0.12s" or "1 failed, 2 passed"
+        summary_match = re.search(r'(\d+) passed', stdout_text)
+        if summary_match:
+            passed_count = int(summary_match.group(1))
+        
+        failed_match = re.search(r'(\d+) failed', stdout_text)
+        if failed_match:
+            failed_count = int(failed_match.group(1))
+        
         # Build result JSON
         test_result = {
             "passed": result.returncode == 0,
@@ -180,6 +228,41 @@ def run_tests(test_dir: str = "tests/") -> str:
             "stderr": result.stderr,
             "return_code": result.returncode
         }
+        
+        # Update run record if active run exists
+        if _active_run_id:
+            try:
+                from arce import run_io
+                run_record = run_io.read_run(_active_run_id)
+                
+                # Determine if this is before or after patching
+                # If tests.before is None, this is the first run (before)
+                # Otherwise, it's after patching
+                if run_record.get("tests", {}).get("before") is None:
+                    # First test run - before patching
+                    run_io.update_run(_active_run_id, tests={
+                        "before": {
+                            "passed": passed_count,
+                            "failed": failed_count,
+                            "stdout": stdout_text
+                        }
+                    })
+                else:
+                    # Subsequent test run - after patching
+                    # Increment self-correction attempts
+                    current_attempts = run_record.get("self_correction_attempts", 0)
+                    run_io.update_run(_active_run_id,
+                        tests={
+                            "after": {
+                                "passed": passed_count,
+                                "failed": failed_count,
+                                "stdout": stdout_text
+                            }
+                        },
+                        self_correction_attempts=current_attempts + 1
+                    )
+            except Exception:
+                pass  # Don't fail the tool if run update fails
         
         return json.dumps(test_result, indent=2)
     
@@ -272,7 +355,9 @@ def generate_audit_trail(
     reachability_verdict: str,
     patch_diff: str,
     test_results: str,
-    e2e_results: str
+    e2e_results: str,
+    cvss_before: Optional[float] = None,
+    cvss_after: float = 0.0
 ) -> str:
     """
     Generate a compliance-ready audit trail document from the remediation results.
@@ -283,6 +368,8 @@ def generate_audit_trail(
         patch_diff: Git diff or description of changes made
         test_results: Output from run_tests
         e2e_results: Results from Playwright E2E verification
+        cvss_before: CVSS score before remediation (optional)
+        cvss_after: CVSS score after remediation (default: 0.0)
     
     Returns:
         Confirmation string with file path and size
@@ -293,15 +380,64 @@ def generate_audit_trail(
         # Try to get agent reasoning trace (triple fallback)
         agent_trace = _get_agent_trace()
         
+        # Build Impact Metrics and Policy Decision sections if active run exists
+        impact_metrics_section = ""
+        policy_decision_section = ""
+        if _active_run_id:
+            try:
+                from arce import run_io
+                run_record = run_io.read_run(_active_run_id)
+                
+                # Update run record with CVSS values if provided
+                if cvss_before is not None:
+                    run_io.update_run(_active_run_id, cvss_before=cvss_before, cvss_after=cvss_after)
+                    run_record = run_io.read_run(_active_run_id)
+                
+                # Compute metrics
+                metrics = run_io.compute_metrics(run_record)
+                
+                # Build Impact Metrics section
+                mttr_display = metrics.get("mttr_human", "In progress...")
+                cvss_before_val = run_record.get("cvss_before", "N/A")
+                cvss_after_val = run_record.get("cvss_after", 0.0)
+                cvss_delta = metrics.get("cvss_delta", "N/A")
+                self_correction = metrics.get("self_correction_attempts", 0)
+                reachability = run_record.get("reachability", reachability_verdict)
+                
+                impact_metrics_section = f"""
+## Impact Metrics
+
+**Mean Time To Remediate (MTTR):** {mttr_display}
+**CVSS Score:** {cvss_before_val} → {cvss_after_val} (Δ {cvss_delta})
+**Self-Correction Attempts:** {self_correction}
+**Reachability Analysis:** {reachability}
+
+---
+"""
+                
+                # Build Policy Decision section if policy verdict exists
+                policy_decision_section = ""
+                policy_verdict = run_record.get("policy_verdict")
+                if policy_verdict:
+                    policy_decision_section = f"""
+## Policy Decision
+
+**Verdict:** {policy_verdict}
+
+---
+"""
+            except Exception:
+                pass  # Skip metrics if there's an error
+        
         # Build the audit trail markdown
         audit_content = f"""# ARCE Audit Trail
 
-**Generated:** {timestamp}  
-**CVE:** {cve_id}  
+**Generated:** {timestamp}
+**CVE:** {cve_id}
 **Reachability Verdict:** {reachability_verdict}
 
 ---
-
+{impact_metrics_section}{policy_decision_section}
 ## Patch Applied
 
 ```diff
@@ -336,6 +472,17 @@ def generate_audit_trail(
         # Write to audit.md in current working directory
         audit_path = Path("audit.md")
         audit_path.write_text(audit_content, encoding='utf-8')
+        
+        # If active run exists, also save a copy to runs/<run_id>/audit.md
+        if _active_run_id:
+            try:
+                from arce import run_io
+                run_dir = Path("runs") / _active_run_id
+                run_audit_path = run_dir / "audit.md"
+                run_audit_path.write_text(audit_content, encoding='utf-8')
+                run_io.update_run(_active_run_id, audit_path=str(run_audit_path))
+            except Exception:
+                pass  # Don't fail if historical copy fails
         
         file_size = audit_path.stat().st_size
         return f"Audit trail generated successfully: {audit_path.absolute()} ({file_size} bytes)"
@@ -491,6 +638,15 @@ def create_governed_pr(branch_name: str, commit_message: str, pr_title: str) -> 
         
         # Extract PR URL from stdout
         pr_url = result.stdout.strip()
+        
+        # Update run record with PR URL if active run exists
+        if _active_run_id:
+            try:
+                from arce import run_io
+                run_io.update_run(_active_run_id, pr_url=pr_url)
+            except Exception:
+                pass  # Don't fail if run update fails
+        
         return f"Pull request created successfully: {pr_url}"
     
     except subprocess.TimeoutExpired:
