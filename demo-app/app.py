@@ -6,7 +6,7 @@ app = Flask(__name__)
 def load_config():
     """Load application configuration from YAML file."""
     with open("config.yaml", "r") as f:
-        config = yaml.load(f)  # Vulnerable: CVE-2020-14343
+        config = yaml.safe_load(f)  # Fixed: CVE-2020-14343
     return config
 
 @app.route("/")
