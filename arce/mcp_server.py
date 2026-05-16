@@ -12,6 +12,58 @@ from fastmcp import FastMCP
 # Initialize FastMCP server
 mcp = FastMCP("arce-tools")
 
+# Module-level variable to track the active run
+_active_run_id: Optional[str] = None
+
+
+@mcp.tool
+def start_pipeline_run(cve_id: str, package_name: str, version_before: str, cvss_before: float) -> str:
+    """
+    Initialize a new remediation pipeline run and set it as active.
+    
+    Args:
+        cve_id: CVE identifier (e.g., "CVE-2020-14343")
+        package_name: Name of the vulnerable package
+        version_before: Vulnerable version
+        cvss_before: CVSS score before remediation
+    
+    Returns:
+        The run_id for this pipeline run
+    """
+    global _active_run_id
+    try:
+        from arce import run_io
+        run_id = run_io.start_run(cve_id, package_name, version_before, cvss_before)
+        _active_run_id = run_id
+        return run_id
+    except Exception as e:
+        return f"Error starting pipeline run: {str(e)}"
+
+
+@mcp.tool
+def end_pipeline_run(status: str) -> str:
+    """
+    Finalize the active pipeline run and clear the active run ID.
+    
+    Args:
+        status: Final status - one of: "succeeded", "halted", "failed"
+    
+    Returns:
+        Confirmation message
+    """
+    global _active_run_id
+    try:
+        if not _active_run_id:
+            return "Error: No active run to finalize"
+        
+        from arce import run_io
+        run_io.finalize_run(_active_run_id, status)
+        run_id = _active_run_id
+        _active_run_id = None
+        return f"Pipeline run {run_id} finalized with status: {status}"
+    except Exception as e:
+        return f"Error ending pipeline run: {str(e)}"
+
 
 @mcp.tool
 def check_reachability(package_name: str, source_dir: str) -> str:
@@ -79,11 +131,21 @@ def check_reachability(package_name: str, source_dir: str) -> str:
         
         # Determine verdict
         if found_import and found_call:
-            return "reachable"
+            verdict = "reachable"
         elif found_import:
-            return "imported-but-unused"
+            verdict = "imported-but-unused"
         else:
-            return "not-imported"
+            verdict = "not-imported"
+        
+        # Update run record if active run exists
+        if _active_run_id:
+            try:
+                from arce import run_io
+                run_io.update_run(_active_run_id, reachability=verdict)
+            except Exception:
+                pass  # Don't fail the tool if run update fails
+        
+        return verdict
     
     except Exception as e:
         return f"Error during reachability check: {str(e)}"

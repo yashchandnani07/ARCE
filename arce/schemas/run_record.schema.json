@@ -1,0 +1,138 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ARCE Run Record",
+  "description": "Schema for a single vulnerability remediation pipeline run",
+  "type": "object",
+  "required": ["run_id", "cve_id", "package", "started_at", "status"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Unique identifier for this run in format YYYYMMDD-HHMMSS-<cve_id>"
+    },
+    "cve_id": {
+      "type": "string",
+      "description": "CVE identifier being remediated (e.g., CVE-2020-14343)"
+    },
+    "package": {
+      "type": "object",
+      "description": "Package information",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Package name (e.g., pyyaml)"
+        },
+        "version_before": {
+          "type": "string",
+          "description": "Vulnerable version before patching"
+        },
+        "version_after": {
+          "type": "string",
+          "description": "Patched version after remediation"
+        }
+      }
+    },
+    "reachability": {
+      "type": "string",
+      "enum": ["reachable", "imported-but-unused", "not-imported"],
+      "description": "Vulnerability reachability analysis result"
+    },
+    "cvss_before": {
+      "type": "number",
+      "description": "CVSS score before remediation",
+      "minimum": 0.0,
+      "maximum": 10.0
+    },
+    "cvss_after": {
+      "type": "number",
+      "description": "CVSS score after remediation (defaults to 0.0 when patched)",
+      "minimum": 0.0,
+      "maximum": 10.0,
+      "default": 0.0
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the run started"
+    },
+    "ended_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the run ended (null if still running)"
+    },
+    "mttr_seconds": {
+      "type": ["number", "null"],
+      "description": "Mean Time To Remediate in seconds (null until run completes)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["running", "succeeded", "halted", "failed"],
+      "description": "Current status of the remediation run"
+    },
+    "self_correction_attempts": {
+      "type": "integer",
+      "description": "Number of self-correction attempts made during remediation",
+      "minimum": 0,
+      "default": 0
+    },
+    "tests": {
+      "type": "object",
+      "description": "Test execution results before and after patching",
+      "properties": {
+        "before": {
+          "type": "object",
+          "description": "Test results before patching",
+          "properties": {
+            "passed": {
+              "type": "integer",
+              "description": "Number of tests passed"
+            },
+            "failed": {
+              "type": "integer",
+              "description": "Number of tests failed"
+            },
+            "stdout": {
+              "type": "string",
+              "description": "Test execution output"
+            }
+          }
+        },
+        "after": {
+          "type": "object",
+          "description": "Test results after patching",
+          "properties": {
+            "passed": {
+              "type": "integer",
+              "description": "Number of tests passed"
+            },
+            "failed": {
+              "type": "integer",
+              "description": "Number of tests failed"
+            },
+            "stdout": {
+              "type": "string",
+              "description": "Test execution output"
+            }
+          }
+        }
+      }
+    },
+    "policy_verdict": {
+      "type": "string",
+      "description": "Policy engine decision (auto_remediate, require_approval, or skip)"
+    },
+    "pr_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "GitHub Pull Request URL (null if PR not created)"
+    },
+    "sbom_path": {
+      "type": ["string", "null"],
+      "description": "Path to the generated SBOM file (null if not generated)"
+    },
+    "audit_path": {
+      "type": ["string", "null"],
+      "description": "Path to the audit trail markdown file"
+    }
+  }
+}

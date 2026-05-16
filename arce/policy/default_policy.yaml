@@ -1,0 +1,34 @@
+# ARCE Default Policy Configuration
+# Defines how the pipeline handles vulnerabilities based on severity and reachability
+
+# Auto-remediate: Automatically patch and create PR without human approval
+auto_remediate:
+  severities:
+    - critical
+    - high
+  reachable_only: true  # Only auto-remediate if vulnerability is reachable
+
+# Require approval: Halt pipeline and wait for human decision
+require_approval:
+  severities:
+    - medium
+    - high  # High severity but not reachable falls here
+  conditions:
+    - severity: high
+      reachable: false
+    - severity: medium
+      reachable: true
+
+# Skip: Log the vulnerability but don't remediate
+skip:
+  severities:
+    - low
+    - negligible
+  conditions:
+    - severity: medium
+      reachable: false
+    - severity: low
+      reachable: false
+    - reachable: not-imported  # Any severity, if not imported
+
+# Made with Bob

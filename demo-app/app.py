@@ -1,11 +1,15 @@
+import os
 from flask import Flask, jsonify
 import yaml
 
 app = Flask(__name__)
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 def load_config():
     """Load application configuration from YAML file."""
-    with open("config.yaml", "r") as f:
+    config_path = os.path.join(BASE_DIR, "config.yaml")
+    with open(config_path, "r") as f:
         config = yaml.load(f)  # Vulnerable: CVE-2020-14343
     return config
 

@@ -8,3 +8,6 @@ pyrightconfig.json
 *.egg-info/
 dist/
 build/
+
+# Run artifacts (keep directory, ignore contents)
+runs/*/
