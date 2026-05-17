@@ -140,7 +140,7 @@ cd ARCE
 # — OR — manual setup:
 python -m venv venv
 .\venv\Scripts\Activate.ps1
-pip install fastmcp pytest pip-audit flask "pyyaml==5.3.1" streamlit
+pip install fastmcp pytest pip-audit flask "pyyaml==5.3.1" streamlit cyclonedx-bom
 npx playwright install
 gh auth login
 ```

@@ -348,6 +348,69 @@ def scan_repository(repo_path: str, output_format: str = "json") -> str:
             "error": f"Error scanning repository: {str(e)}"
         })
 
+@mcp.tool
+def generate_sbom(project_dir: str) -> str:
+    """
+    Generate a CycloneDX SBOM (Software Bill of Materials) for the project.
+    
+    Args:
+        project_dir: Project directory containing requirements.txt
+    
+    Returns:
+        Absolute path to the generated SBOM file, or error message
+    """
+    try:
+        import sys
+        import shutil
+        project_path = Path(__file__).parent.parent / project_dir
+        
+        # Validate project directory
+        if not project_path.exists():
+            return f"Error: Project directory {project_dir} does not exist"
+        
+        # Check if requirements.txt exists
+        requirements_file = project_path / "requirements.txt"
+        if not requirements_file.exists():
+            return f"Error: No requirements.txt found in {project_dir}"
+        
+        # Output SBOM path
+        sbom_path = project_path / "sbom.json"
+        
+        # Run cyclonedx-bom to generate SBOM
+        result = subprocess.run(
+            [sys.executable, "-m", "cyclonedx_py", "requirements", 
+             str(requirements_file), "-o", str(sbom_path)],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode != 0:
+            return f"Error generating SBOM: {result.stderr}"
+        
+        # Verify SBOM was created
+        if not sbom_path.exists():
+            return f"Error: SBOM file was not created at {sbom_path}"
+        
+        # If active run exists, copy SBOM to runs directory
+        if _active_run_id:
+            try:
+                from arce import run_io
+                run_sbom_path = Path(__file__).parent.parent / "runs" / _active_run_id / "sbom.json"
+                run_sbom_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(sbom_path, run_sbom_path)
+                run_io.update_run(_active_run_id, sbom_path=str(run_sbom_path))
+            except Exception as e:
+                # Don't fail if run update fails
+                pass
+        
+        return str(sbom_path.absolute())
+    
+    except subprocess.TimeoutExpired:
+        return "Error: SBOM generation timed out after 60 seconds"
+    except Exception as e:
+        return f"Error generating SBOM: {str(e)}"
+
 
 
 @mcp.tool
@@ -430,6 +493,30 @@ def generate_audit_trail(
             except Exception:
                 pass  # Skip metrics if there's an error
         
+        # Build SBOM section if SBOM exists
+        sbom_section = ""
+        if _active_run_id:
+            try:
+                from arce import run_io
+                run_record = run_io.read_run(_active_run_id)
+                sbom_path = run_record.get("sbom_path")
+                if sbom_path:
+                    sbom_section = f"""
+## Software Bill of Materials (SBOM)
+
+**Format:** CycloneDX JSON
+**Location:** `{sbom_path}`
+
+The SBOM provides a complete inventory of all software components and dependencies, enabling:
+- Supply chain risk assessment
+- License compliance verification
+- Vulnerability tracking across the dependency tree
+
+---
+"""
+            except Exception:
+                pass  # Skip SBOM section if there's an error
+        
         # Build the audit trail markdown
         audit_content = f"""# ARCE Audit Trail
 
@@ -460,7 +547,7 @@ def generate_audit_trail(
 {e2e_results}
 
 ---
-
+{sbom_section}
 ## Agent Reasoning Trace
 
 {agent_trace}
@@ -588,7 +675,26 @@ def create_governed_pr(branch_name: str, commit_message: str, pr_title: str) -> 
         if result.returncode != 0:
             return f"Error creating branch: {result.stderr}"
         
-        # Step 2: Stage all changes
+        # Step 2: Stage all changes including SBOM if it exists
+        # First, check if SBOM exists in runs directory and add it
+        if _active_run_id:
+            try:
+                from arce import run_io
+                run_record = run_io.read_run(_active_run_id)
+                sbom_path = run_record.get("sbom_path")
+                if sbom_path and Path(sbom_path).exists():
+                    # Add the SBOM file specifically
+                    subprocess.run(
+                        ["git", "add", str(sbom_path)],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        shell=True
+                    )
+            except Exception:
+                pass  # Don't fail if SBOM staging fails
+        
+        # Stage all other changes
         result = subprocess.run(
             ["git", "add", "-A"],
             capture_output=True,
