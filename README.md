@@ -42,43 +42,74 @@ ARCE is a **closed-loop, autonomous remediation pipeline** that transforms a CVE
 ## 🏗️ Architecture
 
 ```
-Demo App (Flask + PyYAML 5.3.1)
-        │
-        ▼
-    pip-audit ──→ CVE JSON (CVE-2020-14343)
-        │
-        ▼
-┌─── IBM Bob (compliance-remediator mode) ───────────────────┐
-│                                                             │
-│  MCP Server 1: arce-tools (FastMCP / Python)               │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ Tool 1: check_reachability  → AST analysis            │  │
-│  │ Tool 2: run_tests           → pytest subprocess       │  │
-│  │ Tool 3: generate_audit_trail → audit.md               │  │
-│  │ Tool 4: create_governed_pr   → gh CLI                 │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  MCP Server 2: Playwright (@playwright/mcp)                │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ browser_navigate, browser_snapshot, browser_screenshot │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  Pipeline:                                                  │
-│  1. Read CVE JSON                                          │
-│  2. check_reachability → "reachable"                       │
-│  3. Patch requirements.txt + pip install                   │
-│  4. run_tests → FAIL (TypeError)                           │
-│  5. Self-correct: yaml.load() → yaml.safe_load()          │
-│  6. run_tests → PASS                                       │
-│  7. Playwright → verify live app at localhost:5000         │
-│  8. generate_audit_trail → audit.md                        │
-│  9. create_governed_pr → GitHub PR                         │
-│                                                             │
+┌─────────────────────────────────────────────────────────────┐
+│                     ARCE Full Stack                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌──────────────────────────────────────────────────┐       │
+│  │  Frontend (React 19 + TanStack Start)            │       │
+│  │  - Marketing site (/)                             │       │
+│  │  - Live Dashboard (/dashboard)                    │       │
+│  │  - Documentation (/docs)                          │       │
+│  │  Port: 5173                                       │       │
+│  └────────────────┬─────────────────────────────────┘       │
+│                   │                                           │
+│                   │ HTTP REST API (CORS enabled)             │
+│                   ▼                                           │
+│  ┌──────────────────────────────────────────────────┐       │
+│  │  Backend (FastAPI)                               │       │
+│  │  - 12 REST endpoints                             │       │
+│  │  - Data transformers                             │       │
+│  │  - Type-safe responses                           │       │
+│  │  Port: 8000                                      │       │
+│  └────────────────┬─────────────────────────────────┘       │
+│                   │                                           │
+│                   │ File I/O                                  │
+│                   ▼                                           │
+│  ┌──────────────────────────────────────────────────┐       │
+│  │  Data Layer (runs/ directory)                    │       │
+│  │  runs/{run_id}/                                  │       │
+│  │    ├─ run.json (structured data)                 │       │
+│  │    ├─ audit.md (markdown report)                 │       │
+│  │    └─ sbom.json (bill of materials)              │       │
+│  └────────────────▲─────────────────────────────────┘       │
+│                   │                                           │
+│                   │ MCP Tools                                 │
+│                   │                                           │
+│  ┌────────────────┴─────────────────────────────────┐       │
+│  │  ARCE Pipeline (Bob + MCP Server)                │       │
+│  │  ┌────────────────────────────────────────────┐  │       │
+│  │  │ MCP Server 1: arce-tools (FastMCP)        │  │       │
+│  │  │ - check_reachability (AST analysis)       │  │       │
+│  │  │ - run_tests (pytest subprocess)           │  │       │
+│  │  │ - generate_audit_trail (audit.md)         │  │       │
+│  │  │ - create_governed_pr (gh CLI)             │  │       │
+│  │  │ - start/end_pipeline_run (run tracking)   │  │       │
+│  │  │ - evaluate_policy (severity gating)       │  │       │
+│  │  └────────────────────────────────────────────┘  │       │
+│  │  ┌────────────────────────────────────────────┐  │       │
+│  │  │ MCP Server 2: Playwright                  │  │       │
+│  │  │ - browser_navigate, browser_snapshot      │  │       │
+│  │  │ - browser_screenshot (E2E verification)   │  │       │
+│  │  └────────────────────────────────────────────┘  │       │
+│  └──────────────────────────────────────────────────┘       │
+│                                                               │
 └─────────────────────────────────────────────────────────────┘
-        │
-        ▼
-    Streamlit Governance Dashboard (hosted demo for judges)
 ```
+
+### Pipeline Flow
+
+1. **Detect** → `pip-audit` scans dependencies
+2. **Verify Reachability** → AST analysis confirms usage
+3. **Evaluate Policy** → Severity-based gating
+4. **Patch** → Upgrade to latest stable version
+5. **Test** → Run pytest (may fail)
+6. **Self-Correct** → Bob fixes breaking changes
+7. **Re-test** → Verify fix works
+8. **E2E Verify** → Playwright checks live app
+9. **Generate Audit** → Create compliance trail
+10. **Create PR** → Submit governed pull request
+11. **Dashboard** → View results in real-time
 
 ---
 
@@ -86,14 +117,16 @@ Demo App (Flask + PyYAML 5.3.1)
 
 | Component | Tool | Cost |
 |-----------|------|:----:|
+| **Frontend** | React 19 + TanStack Start + Vite 7 | Free |
+| **Backend API** | FastAPI + Uvicorn | Free |
 | **Detection** | `pip-audit` (backed by OSV.dev) | Free |
 | **Agentic Core** | IBM Bob — custom mode | Provided |
-| **MCP Server 1** | `FastMCP` (Python) — 4 custom tools | Free |
+| **MCP Server 1** | `FastMCP` (Python) — remediation tools | Free |
 | **MCP Server 2** | `@playwright/mcp` — E2E browser verification | Free |
 | **Testing** | `pytest` | Free |
 | **Static Analysis** | Python `ast` module | Built-in |
 | **PR Creation** | GitHub CLI (`gh`) | Free |
-| **Hosted Demo** | Streamlit Community Cloud | Free |
+| **UI Components** | shadcn/ui + Tailwind CSS v4 | Free |
 
 > **Total cost: $0** — Every component is free or open-source.
 
@@ -101,11 +134,11 @@ Demo App (Flask + PyYAML 5.3.1)
 
 ## 🎬 Demo
 
-### 🌐 Live Governance Dashboard
+### 🌐 Live Dashboard (React + FastAPI)
 
-> **[View the ARCE Governance Dashboard →](https://arce-dashboard.streamlit.app)**
->
-> *(Streamlit Community Cloud — a real-time view of completed ARCE remediation runs)*
+> **Frontend**: Modern React dashboard with real-time metrics
+> **Backend**: FastAPI REST API serving live remediation data
+> **[View Legacy Streamlit Dashboard →](https://arce-dashboard.streamlit.app)**
 
 ### 📋 Governed Pull Request
 
@@ -121,28 +154,47 @@ Demo App (Flask + PyYAML 5.3.1)
 
 ## 🚀 Quick Start
 
+### One-Command Setup
+
+```powershell
+# Windows
+.\start-servers.ps1
+
+# Linux/Mac
+chmod +x start-servers.sh
+./start-servers.sh
+```
+
+**That's it!** This single command:
+- ✅ Installs all dependencies (backend + frontend)
+- ✅ Starts FastAPI backend on `http://localhost:8000`
+- ✅ Starts React frontend on `http://localhost:5173`
+- ✅ Configures CORS for local development
+
+### Access Points
+
+- **Frontend Dashboard**: http://localhost:5173
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
+
 ### Prerequisites
 
 - **Python 3.10+**
-- **Node.js 18+** (for Playwright MCP)
+- **Bun** (or Node.js 18+) — `npm install -g bun`
 - **Git** + **GitHub CLI (`gh`)** — `winget install GitHub.cli`
 - **IBM Bob** (provided by hackathon)
 
-### 1. Clone & Setup
+### Manual Setup (if needed)
 
 ```powershell
-git clone https://github.com/yashchandnani07/ARCE.git
-cd ARCE
+# Backend
+pip install -r arce/requirements-api.txt
+python arce/api_server.py
 
-# Automated setup (recommended)
-.\setup-mcp.ps1
-
-# — OR — manual setup:
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install fastmcp pytest pip-audit flask "pyyaml==5.3.1" streamlit cyclonedx-bom
-npx playwright install
-gh auth login
+# Frontend (in new terminal)
+cd Frontend
+bun install
+bun dev
 ```
 
 ### 2. Verify the Vulnerability Exists
@@ -199,18 +251,64 @@ Remember to use project_dir="demo-app-jinja" when calling run_tests.
 
 ### 5. View the Results
 
+**Live Dashboard** (already running at http://localhost:5173):
+- Real-time KPIs (security score, open critical CVEs, auto-patched count)
+- Repository status with severity breakdown
+- Activity feed showing recent events
+- Pull request details with AI reasoning trace
+- Audit reports with download links
+
+**Check the Fix**:
 ```powershell
-# Check the fix
 type demo-app\app.py          # yaml.load(f) → yaml.safe_load(f) ✅
 type demo-app\requirements.txt # pyyaml upgraded ✅
-
-# View the audit trail
 type audit.md                  # Full compliance document ✅
+```
 
-# Run the governance dashboard
+**Legacy Streamlit Dashboard** (optional):
+```powershell
 cd dashboard
 streamlit run streamlit_app.py
 ```
+
+---
+
+## 🎨 Frontend-Backend Integration
+
+### Modern React Dashboard
+
+The ARCE dashboard is a production-ready React application with:
+
+**Frontend Features**:
+- ⚡ **React 19** with TanStack Start for SSR
+- 🎨 **Tailwind CSS v4** with custom design tokens
+- 🧩 **shadcn/ui** components for consistent UI
+- 📊 **Real-time metrics** from live remediation runs
+- 🔄 **Smart fallback** to mock data when backend unavailable
+- 📱 **Responsive design** for desktop and mobile
+
+**Backend API** (FastAPI):
+- 🚀 **12 REST endpoints** serving dashboard data
+- 🔄 **Data transformers** converting run records to frontend types
+- 🔒 **CORS configured** for secure local development
+- 📝 **Type-safe responses** matching frontend contracts
+- 📊 **Aggregated metrics** (KPIs, repositories, activity feed)
+- 📥 **File downloads** for audit trails and SBOMs
+
+**Key Endpoints**:
+- `GET /api/kpis` - Dashboard KPI metrics
+- `GET /api/repositories` - Repository status list
+- `GET /api/activity` - Activity feed events
+- `GET /api/pull-requests/open` - Latest open PR
+- `GET /api/runs` - All run records
+- `GET /api/audits/{run_id}/markdown` - Download audit trail
+
+**Data Flow**:
+```
+MCP Pipeline → runs/{run_id}/run.json → FastAPI → React Dashboard
+```
+
+See [`BACKEND-INTEGRATION.md`](BACKEND-INTEGRATION.md) for complete API documentation.
 
 ---
 
@@ -218,43 +316,58 @@ streamlit run streamlit_app.py
 
 ```
 ARCE/
+├── Frontend/                   # 🆕 React Dashboard (TanStack Start + Vite)
+│   ├── src/
+│   │   ├── routes/             #   File-based routing (/, /dashboard, /docs)
+│   │   ├── components/         #   UI components + shadcn primitives
+│   │   ├── lib/api.ts          #   Backend adapter (wired to FastAPI)
+│   │   └── data/types.ts       #   TypeScript type definitions
+│   ├── .env.local              #   API base URL configuration
+│   └── package.json            #   Frontend dependencies
+│
+├── arce/                       # Backend & MCP Server
+│   ├── api_server.py           # 🆕 FastAPI REST API (12 endpoints)
+│   ├── requirements-api.txt    # 🆕 Backend dependencies
+│   ├── mcp_server.py           #   FastMCP server with remediation tools
+│   ├── run_io.py               #   Run record I/O operations
+│   ├── policy/                 #   Policy engine for severity-based gating
+│   └── schemas/                #   JSON schemas for run records
+│
+├── runs/                       # 🆕 Run artifacts (created by pipeline)
+│   └── {run_id}/               #   Each run gets its own directory
+│       ├── run.json            #   Structured run record
+│       ├── audit.md            #   Compliance audit trail
+│       └── sbom.json           #   Software bill of materials
+│
 ├── demo-app/                   # Target application with known vulnerability
 │   ├── app.py                  #   Flask app with vulnerable yaml.load()
-│   ├── config.yaml             #   App configuration (YAML deserialization target)
+│   ├── config.yaml             #   App configuration
 │   ├── requirements.txt        #   pyyaml==5.3.1 → CVE-2020-14343
-│   └── tests/
-│       ├── __init__.py
-│       └── test_app.py         #   3 pytest tests (health, index, load_config)
+│   └── tests/                  #   pytest test suite
 │
-├── arce/                       # MCP Server — the 4 ARCE tools
-│   ├── mcp_server.py           #   FastMCP server with check_reachability,
-│   │                           #   run_tests, generate_audit_trail,
-│   │                           #   create_governed_pr
-│   └── run_mcp_server.py       #   Wrapper that suppresses stderr noise
+├── demo-app-jinja/             # Second demo scenario (Jinja2 CVE)
+│   ├── app.py                  #   Flask app with vulnerable xmlattr filter
+│   ├── requirements.txt        #   jinja2==3.1.2 → CVE-2024-22195
+│   └── tests/                  #   pytest test suite
 │
-├── dashboard/                  # Streamlit Governance Dashboard
-│   ├── streamlit_app.py        #   SOC-style dashboard with live pipeline view
-│   ├── audit.md                #   Audit trail from a successful ARCE run
+├── dashboard/                  # Legacy Streamlit Dashboard
+│   ├── streamlit_app.py        #   SOC-style dashboard
 │   └── requirements.txt        #   streamlit + plotly dependencies
 │
-├── bob-report/                 # Exported IBM Bob task report
-│   └── ...                     #   Markdown export of Bob's reasoning sessions
-│
 ├── .bob/                       # IBM Bob configuration
-│   ├── mcp.json                #   MCP server registration (arce-tools + playwright)
+│   ├── mcp.json                #   MCP server registration
 │   └── custom_modes.yaml       #   compliance-remediator mode definition
 │
-├── Project-context/            # Design documents
-│   ├── PRD.md                  #   Product Requirements Document
-│   └── phasewise plan.md       #   Implementation plan (6 phases)
-│
-├── audit.md                    # Generated audit trail (from pipeline run)
-├── cve_output.json             # pip-audit scan output
-├── setup-mcp.ps1               # Automated setup script
-├── MCP-CONFIGURATION-GUIDE.md  # Detailed MCP configuration reference
-├── QUICK-START.md              # Quick start guide
-├── SETUP-SUMMARY.md            # Setup summary
-└── .gitignore
+├── start-servers.ps1           # 🆕 One-command startup (Windows)
+├── start-servers.sh            # 🆕 One-command startup (Linux/Mac)
+├── test_integration.py         # 🆕 Backend integration tests
+├── BACKEND-INTEGRATION.md      # 🆕 API documentation (372 lines)
+├── FRONTEND-BACKEND-SETUP.md   # 🆕 Setup guide (344 lines)
+├── INTEGRATION-SUMMARY.md      # 🆕 Integration overview (390 lines)
+├── audit.md                    #   Generated audit trail
+├── cve_output.json             #   pip-audit scan output
+├── setup-mcp.ps1               #   MCP setup script
+└── MCP-CONFIGURATION-GUIDE.md  #   MCP configuration reference
 ```
 
 ---

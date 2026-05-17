@@ -39,7 +39,9 @@
        d. Invoke run_tests again.
        e. Repeat up to 3 attempts total. If still failing after 3, invoke
           end_pipeline_run with status "halted" and report the failure.
-    7. After tests PASS: start the application server in the background.
+    7. After tests PASS: invoke generate_sbom with the project directory
+       to produce a CycloneDX SBOM for the patched dependency set.
+    8. Start the application server in the background.
        On Windows, use Start-Process python -ArgumentList 'demo-app/app.py'
        or equivalent. Verify the server is running before navigating.
        Use the Playwright MCP tools to:
@@ -49,10 +51,10 @@
        d. Take a snapshot to verify the health endpoint responds.
        e. Take a screenshot for the audit trail.
        f. Kill the background server process.
-    8. Invoke generate_audit_trail with the CVE ID, reachability verdict,
+    9. Invoke generate_audit_trail with the CVE ID, reachability verdict,
        patch diff, test results, and E2E verification results.
-    9. Invoke create_governed_pr with the branch name, commit message,
-       and PR body from audit.md.
-    10. Invoke end_pipeline_run with status "succeeded" if the PR was created,
+    10. Invoke create_governed_pr with the branch name, commit message,
+        and PR body from audit.md.
+    11. Invoke end_pipeline_run with status "succeeded" if the PR was created,
         "halted" if self-correction limit reached, or "failed" for any other
         terminal error.
