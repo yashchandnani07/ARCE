@@ -161,6 +161,8 @@ Should flag `pyyaml==5.3.1` with **CVE-2020-14343** (arbitrary code execution vi
 
 ### 4. Trigger the ARCE Pipeline
 
+#### Scenario A: PyYAML Unsafe Deserialization (CVE-2020-14343)
+
 1. Switch to **ARCE Compliance Remediator** mode in Bob IDE
 2. Paste the pip-audit output and prompt:
 
@@ -171,6 +173,29 @@ Please execute the full remediation pipeline on the demo-app/ directory.
 ```
 
 3. Watch Bob autonomously execute all 9 steps 🚀
+
+#### Scenario B: Jinja2 Template Injection (CVE-2024-22195)
+
+1. Verify the vulnerability exists:
+
+```powershell
+.\venv\Scripts\pip-audit.exe --format json -r demo-app-jinja/requirements.txt
+```
+
+Should flag `jinja2==3.1.2` with **CVE-2024-22195** (attribute injection via xmlattr filter).
+
+2. Switch to **ARCE Compliance Remediator** mode in Bob IDE
+3. Paste the pip-audit output and prompt:
+
+```
+I have scanned the demo-app-jinja directory with pip-audit and found vulnerabilities.
+Here is the output: <paste CVE JSON>
+Please execute the full remediation pipeline on the demo-app-jinja/ directory.
+Remember to use project_dir="demo-app-jinja" when calling run_tests.
+```
+
+4. Watch Bob autonomously detect the jinja2 vulnerability, upgrade to the latest version,
+   and verify the fix through the attribute injection test 🚀
 
 ### 5. View the Results
 

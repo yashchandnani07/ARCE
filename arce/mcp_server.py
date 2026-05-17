@@ -185,12 +185,13 @@ def check_reachability(package_name: str, source_dir: str) -> str:
 
 
 @mcp.tool
-def run_tests(test_dir: str = "tests/") -> str:
+def run_tests(test_dir: str = "tests/", project_dir: str = "demo-app") -> str:
     """
     Run pytest on the specified test directory and return the results.
     
     Args:
         test_dir: Directory containing test files (default: "tests/")
+        project_dir: Project directory to run tests in (default: "demo-app")
     
     Returns:
         JSON string with keys: passed (bool), stdout (str), stderr (str), return_code (int)
@@ -204,7 +205,7 @@ def run_tests(test_dir: str = "tests/") -> str:
             capture_output=True,
             text=True,
             timeout=60,
-            cwd=str(Path(__file__).parent.parent / "demo-app")
+            cwd=str(Path(__file__).parent.parent / project_dir)
         )
         
         # Parse test counts from pytest output
