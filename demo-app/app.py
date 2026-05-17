@@ -10,7 +10,7 @@ def load_config():
     """Load application configuration from YAML file."""
     config_path = os.path.join(BASE_DIR, "config.yaml")
     with open(config_path, "r") as f:
-        config = yaml.load(f)  # Vulnerable: CVE-2020-14343
+        config = yaml.safe_load(f)  # Fixed: CVE-2020-14343
     return config
 
 @app.route("/")
