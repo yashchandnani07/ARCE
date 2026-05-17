@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "arce-tools": {
+      "command": "d:/Prooject/bob/ACRE/venv/Scripts/python.exe",
+      "args": ["arce/mcp_server.py"],
+      "alwaysAllow": [
+        "start_pipeline_run",
+        "end_pipeline_run",
+        "evaluate_policy",
+        "check_reachability",
+        "run_tests",
+        "scan_repository",
+        "generate_sbom",
+        "generate_audit_trail",
+        "create_governed_pr"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "alwaysAllow": [
+        "browser_navigate",
+        "browser_snapshot",
+        "browser_take_screenshot",
+        "browser_close",
+        "browser_console_messages"
+      ]
+    }
+  }
+}
+
+// Made with Bob

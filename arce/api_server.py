@@ -51,7 +51,7 @@ def transform_to_kpi(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     # Count critical CVEs (open = not yet remediated)
     critical_count = len([
         r for r in runs
-        if r.get("package", {}).get("cvss_before", 0) >= 9.0
+        if (r.get("cvss_before", 0) or 0) >= 9.0
         and r.get("status") not in ["success", "succeeded"]
     ])
     
@@ -118,7 +118,7 @@ def transform_to_repositories(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]
         repo_name = f"acme/{run.get('package', {}).get('name', 'unknown')}"
         
         if repo_name not in repo_data:
-            cvss = run.get("package", {}).get("cvss_before", 0)
+            cvss = run.get("cvss_before", 0) or 0
             severity_critical = 1 if cvss >= 9.0 else 0
             severity_high = 1 if 7.0 <= cvss < 9.0 else 0
             severity_medium = 1 if 4.0 <= cvss < 7.0 else 0
@@ -126,8 +126,11 @@ def transform_to_repositories(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]
             status = run.get("status", "unknown")
             tone_map = {
                 "success": "ok",
+                "succeeded": "ok",
                 "in_progress": "ai",
+                "running": "ai",
                 "failed": "err",
+                "halted": "err",
                 "unknown": "info"
             }
             
@@ -266,7 +269,7 @@ def transform_to_pull_request(run: Dict[str, Any]) -> Dict[str, Any]:
         })
     
     # Determine risk level
-    cvss = package.get("cvss_before", 0)
+    cvss = run.get("cvss_before", 0) or 0
     risk = "HIGH" if cvss >= 7.0 else "MEDIUM" if cvss >= 4.0 else "LOW"
     
     return {
@@ -277,7 +280,7 @@ def transform_to_pull_request(run: Dict[str, Any]) -> Dict[str, Any]:
         "filesChanged": 2,
         "additions": len([d for d in diff if d["sign"] == "+"]),
         "deletions": len([d for d in diff if d["sign"] == "-"]),
-        "testsPassed": f"{tests.get('after_patch', {}).get('passed', 0)} / {tests.get('after_patch', {}).get('total', 0)}",
+        "testsPassed": f"{tests.get('after', {}).get('passed', 0)} / {tests.get('after', {}).get('passed', 0) + tests.get('after', {}).get('failed', 0)}",
         "regressions": 0,
         "risk": risk,
         "url": pr_url or "#",
@@ -289,19 +292,27 @@ def transform_to_audit_report(run: Dict[str, Any]) -> Dict[str, Any]:
     """Transform run data into audit report."""
     
     package = run.get("package", {})
-    reachability = run.get("reachability", {})
+    reachability = run.get("reachability")  # Can be a string or dict or None
+    
+    # Normalize reachability to a verdict string
+    if isinstance(reachability, dict):
+        reachability_verdict = reachability.get("verdict", "unknown")
+    elif isinstance(reachability, str):
+        reachability_verdict = reachability
+    else:
+        reachability_verdict = "unknown"
     
     # Build reasoning from run history
     reasoning = []
     if run.get("self_correction_attempts", 0) > 0:
         reasoning.append(f"Applied {run.get('self_correction_attempts')} self-corrections")
-    if run.get("tests", {}).get("after_patch", {}).get("passed"):
-        reasoning.append(f"All tests passing after patch")
-    if reachability.get("verdict") == "reachable":
+    if run.get("tests", {}).get("after", {}) and run.get("tests", {}).get("after", {}).get("failed", 1) == 0:
+        reasoning.append("All tests passing after patch")
+    if reachability_verdict == "reachable":
         reasoning.append("Vulnerability confirmed reachable via AST analysis")
     
     # Determine severity
-    cvss = package.get("cvss_before", 0)
+    cvss = run.get("cvss_before", 0) or 0
     if cvss >= 9.0:
         severity = "CRITICAL"
     elif cvss >= 7.0:
@@ -319,7 +330,7 @@ def transform_to_audit_report(run: Dict[str, Any]) -> Dict[str, Any]:
             "to": package.get("version_after", "unknown")
         },
         "severity": severity,
-        "reachable": reachability.get("verdict") == "reachable",
+        "reachable": reachability_verdict == "reachable",
         "reasoning": reasoning,
         "signoff": {
             "agent": "bob/compliance-remediator",
@@ -371,7 +382,7 @@ async def get_open_pull_request():
     
     # Find most recent successful run with PR
     for run in runs:
-        if run.get("status") == "success" and run.get("pr_url"):
+        if run.get("status") in ["success", "succeeded"] and run.get("pr_url"):
             return transform_to_pull_request(run)
     
     # Return empty PR if none found
@@ -390,15 +401,19 @@ async def get_reasoning_trace(pr_number: int):
             # Build reasoning trace
             trace = []
             
-            if run.get("policy_verdict"):
+            policy_verdict = run.get("policy_verdict")
+            if policy_verdict:
+                # policy_verdict is stored as a string like "auto_remediate: reason..."
                 trace.append({
                     "tag": "[plan]",
-                    "text": f"Policy: {run['policy_verdict'].get('action', 'unknown')}",
+                    "text": f"Policy: {policy_verdict}",
                     "tone": "ai"
                 })
             
-            if run.get("reachability", {}).get("verdict"):
-                verdict = run["reachability"]["verdict"]
+            reachability = run.get("reachability")
+            if reachability:
+                # reachability is a string: "reachable", "imported-but-unused", "not-imported"
+                verdict = reachability if isinstance(reachability, str) else reachability.get("verdict", "unknown")
                 trace.append({
                     "tag": "[ok]" if verdict == "reachable" else "[info]",
                     "text": f"Reachability: {verdict}",
@@ -412,11 +427,12 @@ async def get_reasoning_trace(pr_number: int):
                     "tone": "ai"
                 })
             
-            tests = run.get("tests", {}).get("after_patch", {})
-            if tests.get("passed") is not None:
+            tests_after = run.get("tests", {}).get("after") or {}
+            if tests_after.get("passed") is not None:
+                total = tests_after.get("passed", 0) + tests_after.get("failed", 0)
                 trace.append({
                     "tag": "[ok]",
-                    "text": f"{tests['passed']} / {tests['total']} tests passing",
+                    "text": f"{tests_after['passed']} / {total} tests passing",
                     "tone": "ok"
                 })
             
@@ -495,7 +511,7 @@ async def get_bob_activity():
         started = run.get("started_at", "")
         ago = _calculate_time_ago(started)
         
-        if run.get("status") == "success":
+        if run.get("status") in ["success", "succeeded"]:
             activities.append({
                 "text": f"patched {package.get('name', 'unknown')}→{package.get('version_after', '?')}",
                 "ago": ago

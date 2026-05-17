@@ -12,4 +12,11 @@ export default defineConfig({
   tanstackStart: {
     server: { entry: "server" },
   },
+  vite: {
+    build: {
+      // Spline 3D chunks are large but lazy-loaded (only on desktop homepage, after idle).
+      // They never block dashboard or initial page render.
+      chunkSizeWarningLimit: 2500,
+    },
+  },
 });
